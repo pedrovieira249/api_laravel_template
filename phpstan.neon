@@ -1,0 +1,16 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+    - vendor/nesbot/carbon/extension.neon
+
+parameters:
+    paths:
+        - app/
+        - database/
+        - routes/
+        - src/
+    level: 9
+    excludePaths:
+        # Published by Pulse, Telescope and Passport; vendor code, not ours to type.
+        - database/migrations/*_create_pulse_tables.php
+        - database/migrations/*_create_telescope_entries_table.php
+        - database/migrations/*_create_oauth_*.php

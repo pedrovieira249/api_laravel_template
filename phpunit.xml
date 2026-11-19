@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+>
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+        <testsuite name="Integration">
+            <directory>tests/Integration</directory>
+        </testsuite>
+        <testsuite name="Feature">
+            <directory>tests/Feature</directory>
+        </testsuite>
+        <testsuite name="Architecture">
+            <directory>tests/Architecture</directory>
+        </testsuite>
+    </testsuites>
+    <source>
+        <include>
+            <directory>app</directory>
+            <directory>src</directory>
+        </include>
+    </source>
+    <php>
+        <env name="APP_ENV" value="testing"/>
+        <env name="APP_MAINTENANCE_DRIVER" value="file"/>
+        <env name="BCRYPT_ROUNDS" value="4"/>
+        <env name="BROADCAST_CONNECTION" value="null"/>
+        <env name="CACHE_STORE" value="array"/>
+        <env name="CONCURRENCY_DRIVER" value="sync"/>
+        <env name="DB_CONNECTION" value="mysql"/>
+        <env name="DB_DATABASE" value="app_test"/>
+        <env name="DB_URL" value=""/>
+        <!-- Parâmetros de autenticação fixados: a suíte não pode depender do .env local. -->
+        <env name="AUTH_GUARD" value="api"/>
+        <env name="AUTH_USER_TOKEN_TTL" value="5"/>
+        <env name="AUTH_USER_REFRESH_TOKEN_TTL" value="10080"/>
+        <env name="AUTH_SERVICE_TOKEN_TTL" value="60"/>
+        <env name="API_PROBLEM_TYPE_BASE" value="https://api.example.com/problems"/>
+        <env name="API_RATE_LIMIT" value="120"/>
+        <env name="API_INTERNAL_RATE_LIMIT" value="600"/>
+        <env name="API_LOGIN_RATE_LIMIT" value="5"/>
+        <env name="API_TOKEN_RATE_LIMIT" value="30"/>
+        <env name="API_REGISTER_RATE_LIMIT" value="5"/>
+        <env name="MAIL_MAILER" value="array"/>
+        <env name="QUEUE_CONNECTION" value="sync"/>
+        <env name="SESSION_DRIVER" value="array"/>
+        <env name="PULSE_ENABLED" value="false"/>
+        <env name="TELESCOPE_ENABLED" value="false"/>
+        <env name="NIGHTWATCH_ENABLED" value="false"/>
+    </php>
+</phpunit>

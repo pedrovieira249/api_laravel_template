@@ -1,0 +1,789 @@
+{
+  "info": {
+    "name": "API Laravel Template",
+    "description": "Fluxos de autenticação (Passport para usuários, Sanctum para APIs internas), administração de perfis e de clientes de serviço e o cadastro de usuários por um sistema interno. Selecione o environment \"API Laravel Template (local)\", confira se base_url aponta para a porta de APP_PORT do seu .env e rode as pastas em ordem (ou a collection inteira no Runner).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "1. Autenticação de usuários (Passport)",
+      "description": "Access token JWT de 5 minutos + refresh token. Os scripts guardam os tokens no environment. Se você demorar mais de 5 minutos entre as requisições, rode \"Renovar tokens\".",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Pública. E-mail + senha por access token (5 min) + refresh token.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.environment.set('access_token', body.access_token);",
+                  "pm.environment.set('refresh_token', body.refresh_token);",
+                  "if (body.data) { pm.environment.set('user_id', body.data.id); }",
+                  "pm.test('devolve um par de tokens', () => pm.expect(body.expires_in).to.eql(300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Quem sou eu",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            },
+            "description": "Dados, perfis e permissões efetivas do usuário autenticado."
+          },
+          "response": []
+        },
+        {
+          "name": "Renovar tokens",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/refresh",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "refresh"
+              ]
+            },
+            "description": "Pública. O refresh token rotaciona: guarde sempre o novo.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{refresh_token}}\"\n}"
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.environment.set('access_token', body.access_token);",
+                  "pm.environment.set('refresh_token', body.refresh_token);",
+                  "if (body.data) { pm.environment.set('user_id', body.data.id); }",
+                  "pm.test('devolve um par de tokens', () => pm.expect(body.expires_in).to.eql(300));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Administração (perfis e permissões)",
+      "description": "Exige login como admin@example.test (ou um perfil com as permissões users.* / roles.*).",
+      "item": [
+        {
+          "name": "Listar permissões",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/permissions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "permissions"
+              ]
+            },
+            "description": "permission:roles.read"
+          },
+          "response": []
+        },
+        {
+          "name": "Listar perfis",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/roles",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "roles"
+              ]
+            },
+            "description": "permission:roles.read"
+          },
+          "response": []
+        },
+        {
+          "name": "Criar perfil",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/roles",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "roles"
+              ]
+            },
+            "description": "permission:roles.manage",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"support\",\n  \"description\": \"Atendimento\",\n  \"permissions\": [\n    \"users.read\"\n  ]\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set('role_id', pm.response.json().data.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ver perfil",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/roles/{{role_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "roles",
+                "{{role_id}}"
+              ]
+            },
+            "description": "permission:roles.read"
+          },
+          "response": []
+        },
+        {
+          "name": "Alterar perfil",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/roles/{{role_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "roles",
+                "{{role_id}}"
+              ]
+            },
+            "description": "permission:roles.manage",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"support\",\n  \"description\": \"Atendimento N1\",\n  \"permissions\": [\n    \"users.read\",\n    \"roles.read\"\n  ]\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Listar usuários",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/users?per_page=15",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "users?per_page=15"
+              ]
+            },
+            "description": "permission:users.read"
+          },
+          "response": []
+        },
+        {
+          "name": "Ver usuário",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/users/{{user_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "users",
+                "{{user_id}}"
+              ]
+            },
+            "description": "permission:users.read"
+          },
+          "response": []
+        },
+        {
+          "name": "Definir perfis do usuário",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/users/{{user_id}}/roles",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "users",
+                "{{user_id}}",
+                "roles"
+              ]
+            },
+            "description": "permission:users.manage. A lista substitui os perfis atuais. Só um admin concede ou retira o perfil admin.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roles\": [\n    \"admin\",\n    \"support\"\n  ]\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Tirar o perfil do usuário",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/users/{{user_id}}/roles",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "users",
+                "{{user_id}}",
+                "roles"
+              ]
+            },
+            "description": "permission:users.manage. Devolve o usuário ao estado inicial: um perfil só pode ser apagado quando ninguém mais o tem.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roles\": [\n    \"admin\"\n  ]\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Apagar perfil",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/roles/{{role_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "roles",
+                "{{role_id}}"
+              ]
+            },
+            "description": "permission:roles.manage. Responde 409 enquanto algum usuário tiver o perfil."
+          },
+          "response": []
+        },
+        {
+          "name": "Listar clientes de serviço",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/service-clients",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "service-clients"
+              ]
+            },
+            "description": "role:admin"
+          },
+          "response": []
+        },
+        {
+          "name": "Criar cliente de serviço",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/service-clients",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "service-clients"
+              ]
+            },
+            "description": "role:admin. O client_secret aparece só nesta resposta. A ability users.register permite cadastrar usuários (pasta 3).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"site-cadastro-{{$timestamp}}\",\n  \"abilities\": [\n    \"users.register\"\n  ]\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.environment.set('client_id', body.data.id);",
+                  "pm.environment.set('client_secret', body.client_secret);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. APIs internas (Sanctum)",
+      "description": "Token de serviço de 1 hora. Rode antes \"Criar cliente de serviço\" (pasta 2) para ter client_id e client_secret. O cadastro de usuários fica aqui: ele exige a ability users.register.",
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{service_token}}",
+            "type": "string"
+          }
+        ]
+      },
+      "item": [
+        {
+          "name": "Obter token de serviço",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/internal/auth/token",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "internal",
+                "auth",
+                "token"
+              ]
+            },
+            "description": "Pública. client_id + client_secret por um token de 1 hora.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"client_id\": \"{{client_id}}\",\n  \"client_secret\": \"{{client_secret}}\"\n}"
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.environment.set('service_token', body.access_token);",
+                  "pm.test('vale uma hora', () => pm.expect(body.expires_in).to.eql(3600));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Quem sou eu (serviço)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/internal/auth/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "internal",
+                "auth",
+                "me"
+              ]
+            },
+            "description": "auth:internal"
+          },
+          "response": []
+        },
+        {
+          "name": "Registrar usuário",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/internal/auth/register",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "internal",
+                "auth",
+                "register"
+              ]
+            },
+            "description": "auth:internal + ability:users.register. O cadastro não é público: só um sistema da casa cria contas, a no máximo 5 por segundo. O e-mail leva um timestamp para ser único a cada execução.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Ana Exemplo\",\n  \"email\": \"ana+{{$timestamp}}@example.test\",\n  \"password\": \"secret-123\",\n  \"password_confirmation\": \"secret-123\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('cria a conta com o perfil padrão', () => pm.expect(body.data.roles).to.eql(['user']));",
+                  "pm.test('devolve os tokens do usuário criado', () => pm.expect(body.expires_in).to.eql(300));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Descartar token",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/internal/auth/token",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "internal",
+                "auth",
+                "token"
+              ]
+            },
+            "description": "Revoga só o token usado na requisição."
+          },
+          "response": []
+        },
+        {
+          "name": "Revogar cliente de serviço (admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/service-clients/{{client_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "service-clients",
+                "{{client_id}}"
+              ]
+            },
+            "description": "role:admin. Usa o token de USUÁRIO: apaga os tokens do cliente e impede novos.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. Encerrar sessão",
+      "description": "Fica por último de propósito: o logout revoga o access token e o refresh token usados nas pastas anteriores.",
+      "item": [
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/logout",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ]
+            },
+            "description": "Revoga o access token usado e o refresh token dele."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

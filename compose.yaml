@@ -1,0 +1,199 @@
+# ============================================================================
+# compose.yaml: a "rede de serviços" do ambiente de desenvolvimento.
+# Cada serviço é um container com uma única responsabilidade.
+# O Docker Compose só procura por compose.yaml / compose.yml / docker-compose.yml.
+#
+# Interpolação: ${VAR:-default} lê a variável do shell OU do arquivo .env desta pasta
+# (o próprio .env do Laravel). Se não existir, usa o default.
+# ============================================================================
+
+# Nome do projeto: prefixo dos containers (<nome>-app-1), da rede e dos volumes.
+# Vem de COMPOSE_PROJECT_NAME no .env: é a ÚNICA coisa a trocar para dois projetos criados
+# a partir deste template conviverem na mesma máquina (além das portas publicadas).
+name: ${COMPOSE_PROJECT_NAME:-api-laravel-template}
+
+services:
+  # --------------------------------------------------------------------------
+  # app: PHP-FPM. É aqui que rodam Composer, Artisan e os testes (make sh / make artisan).
+  # --------------------------------------------------------------------------
+  app:
+    build:
+      # Contexto de build: os COPY do Dockerfile são relativos a esta pasta.
+      context: ./docker/php
+      # Estágio "dev" do Dockerfile multi-stage (o "production" é construído à parte: make build-prod).
+      target: dev
+      # Passa o UID/GID do host para o Dockerfile (ARG). ":-1000" é o default se a variável
+      # não existir. "UID" é variável do bash, mas não exportada: por isso o default.
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
+    # Nome da imagem construída. Os serviços queue e scheduler reaproveitam esta imagem
+    # em vez de construir de novo.
+    image: ${COMPOSE_PROJECT_NAME:-api-laravel-template}/app:dev
+    # Nunca tenta "pull" dessa imagem de um registry (ela só existe aqui): sempre constrói.
+    # Com cache de camadas o custo é de segundos, e garante que mudanças em docker/php valem.
+    pull_policy: build
+    # Sobe de novo após reboot ou crash, exceto se você parou com "docker compose stop/down".
+    restart: unless-stopped
+    volumes:
+      # BIND MOUNT: a pasta do projeto no host É /var/www/html no container.
+      # É isso que dá o "hot reload": nada é copiado para a imagem, nada precisa de rebuild.
+      - .:/var/www/html
+    # O app só sobe depois que MySQL e Redis estiverem "healthy" (passaram no healthcheck),
+    # e não apenas "ligados". Evita o Laravel tentar conectar antes do MySQL aceitar conexões.
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # Saudável = php-fpm escutando na porta 9000. "nc" (netcat) vem no BusyBox do Alpine.
+    # Depois, se quisermos, trocamos por um cliente FastCGI batendo em /ping (www.conf).
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "9000"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    # "docker compose watch" (ou "up --watch") observa esta pasta e reconstrói a imagem sozinho
+    # quando Dockerfile, .ini ou www.conf mudarem. O código da app não precisa disso (bind mount).
+    develop:
+      watch:
+        - path: ./docker/php
+          action: rebuild
+
+  # --------------------------------------------------------------------------
+  # nginx: recebe o HTTP na porta 8080 do host, serve os arquivos estáticos de public/
+  # e repassa os *.php para o app via FastCGI (app:9000).
+  # --------------------------------------------------------------------------
+  nginx:
+    image: nginx:stable-alpine
+    restart: unless-stopped
+    ports:
+      # "host:container". APP_PORT vai existir no .env do Laravel; default 8080.
+      - "${APP_PORT:-8080}:80"
+    volumes:
+      # O nginx precisa enxergar public/ para servir CSS/JS/imagens. Somente leitura (:ro):
+      # o nginx nunca escreve na aplicação; se for comprometido, não altera código.
+      - .:/var/www/html:ro
+      # Configuração do servidor. ATENÇÃO: se o arquivo não existir no
+      # host na hora do "up", o Docker cria uma PASTA com esse nome e o nginx quebra.
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      app:
+        condition: service_healthy
+    # /up é a rota de health que o Laravel traz pronta. Fica "unhealthy" enquanto vendor/
+    # não existir (antes do composer install não há quem responda).
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/up"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  # --------------------------------------------------------------------------
+  # mysql: banco de dados. MySQL 9.7 é a LTS atual.
+  # --------------------------------------------------------------------------
+  mysql:
+    image: mysql:9.7
+    restart: unless-stopped
+    ports:
+      # Exposto no host só para você usar DBeaver/TablePlus/mysql-cli. O app fala com
+      # "mysql:3306" pela rede interna do Compose, sem passar por aqui.
+      - "${FORWARD_DB_PORT:-3306}:3306"
+    environment:
+      # Senha do root (obrigatória na imagem oficial). Só usada por ferramentas e pelo healthcheck.
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root}
+      # Banco criado no primeiro boot. Mesmas chaves do .env do Laravel: uma única fonte da verdade.
+      MYSQL_DATABASE: ${DB_DATABASE:-app}
+      # Usuário de aplicação (não usamos root no Laravel) com acesso total ao MYSQL_DATABASE.
+      MYSQL_USER: ${DB_USERNAME:-app}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-secret}
+    volumes:
+      # VOLUME NOMEADO: os dados vivem fora do container. "docker compose down" preserva;
+      # "docker compose down -v" apaga. Sem isso, cada recriação do container zeraria o banco.
+      - mysql-data:/var/lib/mysql
+      # charset/collation e config do servidor:
+      - ./docker/mysql/my.cnf:/etc/mysql/conf.d/my.cnf:ro
+      # scripts executados SÓ no primeiro boot (volume vazio): criam o banco <DB_DATABASE>_test:
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+    # "mysqladmin ping" responde quando o servidor aceita conexões. O "$$" é escape: "$" seria
+    # interpolado pelo Compose no host; "$$" chega ao container como "$" e o shell dele expande.
+    # start_period: tempo de carência para a inicialização do banco antes de contar falhas.
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+
+  # --------------------------------------------------------------------------
+  # redis: cache, sessões, locks e filas (Horizon).
+  # --------------------------------------------------------------------------
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    # AOF (append-only file): persiste cada escrita em disco. Sem isso, um restart do Redis
+    # perderia os jobs que estavam na fila.
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${FORWARD_REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # --------------------------------------------------------------------------
+  # mailpit: servidor SMTP falso. Todo e-mail que o Laravel enviar cai aqui, nunca sai.
+  # UI em http://localhost:8025; o Laravel aponta MAIL_HOST=mailpit, MAIL_PORT=1025.
+  # --------------------------------------------------------------------------
+  mailpit:
+    image: axllent/mailpit
+    restart: unless-stopped
+    ports:
+      - "${FORWARD_MAILPIT_PORT:-8025}:8025"
+      - "${FORWARD_MAILPIT_SMTP_PORT:-1025}:1025"
+    environment:
+      # Aceita qualquer usuário/senha e conexão sem TLS: é dev, não existe segurança a proteger.
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+
+  # --------------------------------------------------------------------------
+  # scheduler: mesma imagem do app, outro comando. "schedule:work" acorda a cada
+  # minuto e roda o que estiver vencido em routes/console.php (ex.: limpeza de tokens expirados).
+  # Sem este serviço nenhuma tarefa agendada executa: o Laravel não tem cron embutido.
+  # --------------------------------------------------------------------------
+  scheduler:
+    image: ${COMPOSE_PROJECT_NAME:-api-laravel-template}/app:dev
+    pull_policy: never
+    restart: unless-stopped
+    command: ["php", "artisan", "schedule:work"]
+    volumes:
+      - .:/var/www/html
+    depends_on:
+      app:
+        condition: service_healthy
+
+  # --------------------------------------------------------------------------
+  # queue: Horizon supervisiona os workers das filas Redis (config/horizon.php).
+  # Dashboard em http://localhost:8080/horizon. Sem este serviço os jobs
+  # ficam enfileirados e nunca executam.
+  # --------------------------------------------------------------------------
+  queue:
+    image: ${COMPOSE_PROJECT_NAME:-api-laravel-template}/app:dev
+    pull_policy: never
+    restart: unless-stopped
+    command: ["php", "artisan", "horizon"]
+    volumes:
+      - .:/var/www/html
+    depends_on:
+      app:
+        condition: service_healthy
+
+# Volumes nomeados (gerenciados pelo Docker, em /var/lib/docker/volumes). Declarar aqui é
+# obrigatório para poder usá-los acima.
+volumes:
+  mysql-data:
+  redis-data:
